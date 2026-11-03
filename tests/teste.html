@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <title>Teste - Prévia por Código de Barras</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Mesmo CSS da extensão -->
+  <link rel="stylesheet" href="../extensao/content.css">
+  <style>
+    body { background: #111; color: #eee; font: 14px "Segoe UI", Arial, sans-serif; margin: 0; padding: 24px; }
+    .linha { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
+    label { display: block; font-size: 12px; opacity: .8; margin-bottom: 4px; }
+    input { background: #222; color: #eee; border: 1px solid #444; border-radius: 4px; padding: 6px 8px; font-size: 14px; }
+    #formNFCe\:tableProdutosNovoLayout\:codigoProduto_input { width: 240px; }
+    button { padding: 7px 12px; border-radius: 4px; border: 0; cursor: pointer; }
+    #painel { margin-top: 120px; display: grid; gap: 8px; max-width: 720px; }
+    #log { background: #1a1a1a; border: 1px solid #333; border-radius: 6px; padding: 10px; min-height: 120px; white-space: pre-wrap; font: 12px Consolas, monospace; }
+    table { border-collapse: collapse; } td, th { padding: 2px 10px; border-bottom: 1px solid #333; text-align: left; }
+    .ok { color: #7bd88f; } .falha { color: #ff6b6b; }
+  </style>
+  <script>
+    // Produtos falsos (os 3 primeiros existem de verdade no cadastro da Giz de Cera)
+    const PRODUTOS = {
+      '7897522746348': [{ codigo: '1', descricao: 'FITA DE CETIM MARROM 10X07', estoque: '4,000', preco: '4,00' }],
+      '7891027283278': [{ codigo: '290297', descricao: 'GRAFITE 2B 0.7MM TILIBRA', estoque: '6,000', preco: '4,80' }],
+      '7899676834728': [
+        { codigo: '69513', descricao: 'KIT MOCHILA YS42273-MC INF.C/RODIN.S.LUNA UN', estoque: '1,000', preco: '288,40' },
+        { codigo: '900001632', descricao: 'MOCHILA MIF5329-C INF.FEM.C/RODAS UND', estoque: '1,000', preco: '203,60' },
+      ],
+      '12345670': [{ codigo: '8', descricao: 'PRODUTO EAN-8 DE TESTE', estoque: '2,000', preco: '1,00' }],
+    };
+    // Consulta falsa usada pelo content.js (com atraso para parecer uma requisição)
+    window.__CODXIS_MOCK_CONSULTA__ = (codigo) => new Promise((ok) => setTimeout(() => ok(PRODUTOS[codigo] || []), 150));
+  </script>
+</head>
+<body>
+  <h2>Teste da prévia por código de barras</h2>
+  <form id="formNFCe" onsubmit="return false">
+    <div class="linha">
+      <div>
+        <label>Código/Descrição</label>
+        <!-- Mesmo id e placeholder do campo real do PDV -->
+        <input id="formNFCe:tableProdutosNovoLayout:codigoProduto_input" type="text" autocomplete="off"
+               placeholder="Busque pelo código ou descrição"
+               onkeyup="validarEnter(event, this.id)">
+      </div>
+      <div><label>Quantidade</label><input id="qtd" value="1,0000" size="8"></div>
+      <div><label>Valor Unit.</label><input id="preco" size="8" readonly></div>
+      <button type="button" onclick="inserir()">Inserir</button>
+    </div>
+  </form>
+
+  <div id="painel">
+    <div>
+      <button type="button" onclick="leitor('7897522746348')">Leitor: Fita (existe)</button>
+      <button type="button" onclick="leitor('7899676834728')">Leitor: Mochila (2 produtos)</button>
+      <button type="button" onclick="leitor('79086899114973')">Leitor: não cadastrado (DV inválido)</button>
+      <button type="button" onclick="leitor('7891234567895')">Leitor: não cadastrado (DV válido)</button>
+      <button type="button" onclick="digitarDevagar('caderno')">Digitar "caderno" (nome)</button>
+      <button type="button" onclick="rodarTestes()">▶ Rodar testes automáticos</button>
+    </div>
+    <div id="log"></div>
+    <div id="resultado"></div>
+  </div>
+
+  <script>
+    const campo = document.getElementById('formNFCe:tableProdutosNovoLayout:codigoProduto_input');
+    const log = (m) => { const el = document.getElementById('log'); el.textContent += m + '\n'; el.scrollTop = el.scrollHeight; };
+    const espera = (ms) => new Promise((r) => setTimeout(r, ms));
+
+    // Imitação do validarEnter do PDV: Enter com número -> "seleciona" o produto
+    function validarEnter(e, id) {
+      if (e.key !== 'Enter') return;
+      const v = document.getElementById(id).value.trim();
+      const p = (PRODUTOS[v] || [])[0];
+      document.getElementById('preco').value = p ? p.preco : '';
+      log('[PDV] Enter recebido pelo sistema com "' + v + '" -> ' + (p ? 'selecionou ' + p.descricao : 'nada selecionado'));
+    }
+    function inserir() { log('[PDV] Inserir: ' + campo.value); campo.value = ''; document.getElementById('preco').value = ''; }
+
+    // Simula um leitor: ~5 ms por caractere e Enter no final
+    async function leitor(codigo) {
+      campo.focus(); campo.value = '';
+      for (const ch of codigo) {
+        campo.dispatchEvent(new KeyboardEvent('keydown', { key: ch, bubbles: true }));
+        campo.value += ch;
+        campo.dispatchEvent(new Event('input', { bubbles: true }));
+        campo.dispatchEvent(new KeyboardEvent('keyup', { key: ch, bubbles: true }));
+        await espera(5);
+      }
+      const enter = { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true };
+      const kd = new KeyboardEvent('keydown', enter);
+      campo.dispatchEvent(kd);
+      campo.dispatchEvent(new KeyboardEvent('keyup', enter));
+      log('[Leitor] ' + codigo + ' + Enter' + (kd.defaultPrevented ? ' (Enter BLOQUEADO!)' : ''));
+      return kd;
+    }
+    async function digitarDevagar(texto) {
+      campo.focus(); campo.value = '';
+      for (const ch of texto) { campo.value += ch; campo.dispatchEvent(new Event('input', { bubbles: true })); await espera(80); }
+    }
+    const caixa = () => document.querySelector('.codxis-previa-cb');
+    const caixaVisivel = () => !!caixa() && !caixa().hidden;
+
+    async function rodarTestes() {
+      const res = [];
+      const ok = (nome, cond) => res.push([nome, !!cond]);
+
+      let kd = await leitor('7897522746348'); await espera(400);
+      ok('Leitor + Enter: prévia mostra o nome', caixaVisivel() && /FITA DE CETIM MARROM/.test(caixa().textContent));
+      ok('Leitor + Enter: Enter não é bloqueado (sistema seleciona)', !kd.defaultPrevented && document.getElementById('preco').value === '4,00');
+      ok('Prévia não mostra custo', !/custo/i.test(caixa().textContent));
+
+      await leitor('7899676834728'); await espera(400);
+      ok('Código com 2 produtos: mostra os dois', /KIT MOCHILA/.test(caixa().textContent) && /MIF5329/.test(caixa().textContent));
+
+      await leitor('79086899114973'); await espera(400);
+      ok('Não encontrado: aviso aparece', caixa().dataset.tipo === 'nao-encontrado' && /não encontrado/i.test(caixa().textContent));
+      ok('Não encontrado: alerta de dígito verificador', /dígito verificador/i.test(caixa().textContent));
+
+      await digitarDevagar('7891027'); await espera(400);
+      ok('Só 7 dígitos: não é código de barras, sem prévia', !caixaVisivel());
+
+      await digitarDevagar('7891027283278'); await espera(600);
+      ok('Digitação manual (sem Enter): prévia aparece após pausa', caixaVisivel() && /GRAFITE/.test(caixa().textContent));
+
+      await digitarDevagar('caderno'); await espera(400);
+      ok('Texto (nome): extensão não interfere', !caixaVisivel());
+
+      await leitor('12345670'); await espera(400);
+      ok('EAN-8 funciona', caixaVisivel() && /EAN-8/.test(caixa().textContent));
+
+      inserir(); await espera(600);
+      ok('Campo limpo (produto inserido): prévia some', !caixaVisivel());
+
+      document.getElementById('resultado').innerHTML = '<table><tr><th>Teste</th><th>Resultado</th></tr>' +
+        res.map(([n, r]) => `<tr><td>${n}</td><td class="${r ? 'ok' : 'falha'}">${r ? 'OK' : 'FALHOU'}</td></tr>`).join('') + '</table>';
+      window.__resultadoTestes = res;
+      return res;
+    }
+  </script>
+  <!-- O content script da extensão, carregado como script normal -->
+  <script src="../extensao/content.js"></script>
+</body>
+</html>

@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "CODXIS - Prévia por Código de Barras",
+  "version": "1.0.0",
+  "description": "Mostra o nome do produto ao digitar ou ler o código de barras no PDV da CODXIS.",
+  "permissions": ["storage"],
+  "content_scripts": [
+    {
+      "matches": ["https://web.codxis.api.br/*"],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle",
+      "all_frames": true
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Prévia por Código de Barras",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

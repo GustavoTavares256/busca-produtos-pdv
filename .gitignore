@@ -1,0 +1,3 @@
+# Arquivos de investigação podem conter tokens/cookies de sessão
+*.har
+investigacao/
